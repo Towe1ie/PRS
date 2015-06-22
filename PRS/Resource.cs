@@ -10,7 +10,7 @@ namespace PRS
     {
         public struct Params
         {
-            double U, X, J, T;
+            public double U, X, J, R;
         }
 
         public int id;
@@ -28,6 +28,13 @@ namespace PRS
             this.id = id;
         }
 
-
+        public string BuzenParams_toString()
+        {
+            return name + ": \n" +
+                   "U: " + buzenParams.U + "\n" +
+                   "X: " + buzenParams.X + "\n" +
+                   "J: " + buzenParams.J + "\n" +
+                   "R: " + buzenParams.R + "\n";
+        }
     }
 }

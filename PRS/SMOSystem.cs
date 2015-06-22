@@ -90,6 +90,16 @@ namespace PRS
         {
             Gordon_Newell();
             Buzen();
+            CalcOutParameters();
+
+            StreamWriter sw = new StreamWriter("../../buzenOut.txt");
+
+            foreach(Resource r in resources)
+            {
+                sw.WriteLine(r.BuzenParams_toString());
+            }
+
+            sw.Close();
         }
 
         public void Gordon_Newell()
@@ -113,6 +123,21 @@ namespace PRS
             {
                 for (int i = 1; i <= num_jobs; ++i)
                     G[i] = G[i] + r.x * G[i - 1];
+            }
+        }
+
+        public void CalcOutParameters()
+        {
+            foreach(Resource r in resources)
+            {
+                r.buzenParams.U = r.x * G[num_jobs - 1] / G[num_jobs];
+                r.buzenParams.X = r.buzenParams.U / r.s;
+
+                r.buzenParams.J = 0;
+                for (int i = 1; i <= num_jobs; ++i)
+                    r.buzenParams.J += Math.Pow(r.x, i) * G[num_jobs - i] / G[num_jobs];
+
+                r.buzenParams.R = r.buzenParams.J / r.buzenParams.X;
             }
         }
     }
