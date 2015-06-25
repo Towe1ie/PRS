@@ -12,6 +12,7 @@ namespace PRS
         {
             SMOSystem smo = new SMOSystem("..//..//inputFile.txt");
             smo.Analyse();
+            smo.simulate(100000);
         }
     }
 }

@@ -26,16 +26,21 @@ namespace PRS
 
         double[] G;
 
+        public double[,] adjMat;
+        public int time = 0;
+
         #endregion
 
         #region Properties
 
         public int NumResources
         {
-            get { return num_cpu + num_sys_disc + num_sys_disc; }
+            get { return num_cpu + num_sys_disc + num_usr_disc; }
         }
 
         #endregion
+
+        #region Initialization
 
         private void parseFile(string inputFileName)
         {
@@ -73,18 +78,81 @@ namespace PRS
         {
             parseFile(inputFileName);
             generateResources();
+            generateAdjMat();
         }
 
         public void generateResources()
         {
             int idGen = 0;
             for (int i = 0; i < num_cpu; ++i)
-                resources.Add(new Resource("CPU " + i, s_equivalent[0] / num_cpu, idGen++));
+                resources.Add(new Resource("CPU " + i, s_equivalent[0] / num_cpu, idGen++, this));
             for (int i = num_cpu; i < num_cpu + num_sys_disc; ++i)
-                resources.Add(new Resource("System disc " + i, s_equivalent[1] / num_sys_disc, idGen++));
+                resources.Add(new Resource("System disc " + i, s_equivalent[1] / num_sys_disc, idGen++, this));
             for (int i = num_cpu + num_sys_disc; i < NumResources; ++i)
-                resources.Add(new Resource("User disc " + i, s_equivalent[2] / num_usr_disc, idGen++));
+                resources.Add(new Resource("User disc " + i, s_equivalent[2] / num_usr_disc, idGen++, this));
         }
+
+        void generateAdjMat()
+        {
+            adjMat = new double[NumResources, NumResources];
+            for (int i = 0; i < num_cpu; ++i)
+            {
+                for (int j = 0; j < num_cpu; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[0, 0] / num_cpu;
+                }
+
+                for (int j = num_cpu; j < num_cpu + num_sys_disc; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[0, 1] / num_sys_disc;
+                }
+
+                for (int j = num_cpu + num_sys_disc; j < num_cpu + num_sys_disc + num_usr_disc; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[0, 2] / num_usr_disc;
+                }
+            }
+
+            for (int i = num_cpu; i < num_cpu + num_sys_disc; ++i)
+            {
+                for (int j = 0; j < num_cpu; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[1, 0] / num_cpu;
+                }
+
+                for (int j = num_cpu; j < num_cpu + num_sys_disc; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[1, 1] / num_sys_disc;
+                }
+
+                for (int j = num_cpu + num_sys_disc; j < num_cpu + num_sys_disc + num_usr_disc; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[1, 2] / num_usr_disc;
+                }
+            }
+
+            for (int i = num_cpu + num_sys_disc; i < NumResources; ++i)
+            {
+                for (int j = 0; j < num_cpu; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[2, 0] / num_cpu;
+                }
+
+                for (int j = num_cpu; j < num_cpu + num_sys_disc; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[2, 1] / num_sys_disc;
+                }
+
+                for (int j = num_cpu + num_sys_disc; j < num_cpu + num_sys_disc + num_usr_disc; ++j)
+                {
+                    adjMat[i, j] = p_equivalent[2, 2] / num_usr_disc;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Buzen's algorithm
 
         public void Analyse()
         {
@@ -116,7 +184,7 @@ namespace PRS
         {
             G = new double[num_jobs + 1];
             G[0] = 1;
-            for (int i = 1; i <= NumResources; ++i)
+            for (int i = 1; i <= num_jobs; ++i)
                 G[i] = 0;
 
             foreach(Resource r in resources)
@@ -140,5 +208,38 @@ namespace PRS
                 r.buzenParams.R = r.buzenParams.J / r.buzenParams.X;
             }
         }
+
+        #endregion
+
+        #region Simulation
+
+        public void simulate(int simulationTime)
+        {
+            foreach (Resource r in resources)
+            {
+                r.initializeSimulation();
+            }
+
+            for (int i = 0; i < num_jobs; ++i)
+                resources[i % NumResources].putJob();
+
+            for (time = 0; time < simulationTime; ++time)
+            {
+                foreach (Resource r in resources)
+                    r.clearEvents();
+                foreach (Resource r in resources)
+                    r.Update();
+            }
+
+            StreamWriter sw = new StreamWriter("..//..//simOut.txt");
+            foreach (Resource r in resources)
+            {
+                r.finishSimulation();
+                sw.WriteLine(r.SimParams_toString() + "\n");
+            }
+            sw.Close();
+        }
+
+        #endregion
     }
 }
