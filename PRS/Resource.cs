@@ -16,6 +16,20 @@ namespace PRS
             public double U, X, J, R;
         }
 
+        public class Job
+        {
+            public int startTime;
+            public int runTime;
+            public int id;
+            public static int idgen = 0;
+            public int cycles = -1;
+
+            public Job()
+            {
+                id = idgen++;
+            }
+        }
+
         #endregion
 
         #region Fields and Properties
@@ -25,8 +39,7 @@ namespace PRS
         public string name;
         public Params buzenParams, simParams;
         public int cumulatedJobs = 0;
-
-        public int putEvents = 0;
+        public LinkedList<Job> buffer = new LinkedList<Job>();
 
         public static Random rand = new Random();
 
@@ -39,9 +52,9 @@ namespace PRS
         #region Simulation Fields
 
         public int arrivals = 0, busy = 0, completed = 0;
-        public int inBuff = 0;
-        public bool working = false;
         public int currJobTime = 0;
+
+        public Job currentJob = null;
 
         public SMOSystem mySystem;
 
@@ -49,37 +62,37 @@ namespace PRS
 
         #region Simulation Methods
 
-        public void Update()
+        public void startJob()
         {
-            cumulatedJobs += (working) ? inBuff + 1 : inBuff;
-            if (working)
+            if (currentJob != null)
+                finishJob();
+
+            currentJob = buffer.First.Value;
+            buffer.RemoveFirst();
+            currJobTime = 0;
+            if (this.id < mySystem.num_cpu)
+                currentJob.cycles++;
+
+
+            if (buffer.Count == 0 || mySystem.time + currentJob.runTime != buffer.First().startTime)
             {
-                busy++;
-                currJobTime++;
-                if (currJobTime >= s)
-                    sendJob();
-            }
-            else
-            {
-                if (inBuff > 0)
-                {
-                    working = true;
-                    currJobTime = 0;
-                    inBuff--;
-                }
+                mySystem.events.Add(mySystem.time + currentJob.runTime, new SMOSystem.Event(this, mySystem.time + currentJob.runTime, name + " finish job", false));
+                //sw.WriteLine("T = " + (mySystem.time + currentJob.runTime) + " job " + currentJob.id + " finish on " + name);
+                //sw.Flush();
             }
         }
 
-        public void sendJob()
+        public void finishJob()
+        {
+            cumulatedJobs += (buffer.Count + 1) * currentJob.runTime;
+            busy += currentJob.runTime;
+            sendJob(currentJob);
+        }
+
+        public void sendJob(Job job)
         {
             completed++;
-            if (inBuff > 0)
-            {
-                inBuff--;
-                currJobTime = 0;
-            }
-            else
-                working = false;
+            currentJob = null;
 
             double r = rand.NextDouble();
             double bottom = 0;
@@ -94,37 +107,43 @@ namespace PRS
                 bottom = upper;
             }
 
-            sw.WriteLine("T = " + mySystem.time + " From " + this.name + " to " + mySystem.resources[i].name);
+            //sw.WriteLine("T = " + mySystem.time + " Job " + job.id + " From " + this.name + " to " + mySystem.resources[i].name);
 
-            mySystem.resources[i].putJob();
+            mySystem.resources[i].putJob(job);
         }
 
-        public void putJob()
+        public void putJob(Job job)
         {
-            putEvents++;
+            job.runTime = (int)s;
+            //job.runTime = (int)(-Math.Log(rand.NextDouble() * s));
+
+            job.startTime = mySystem.time;
+            if (buffer.Count != 0)
+                job.startTime = buffer.Last.Value.startTime + buffer.Last.Value.runTime;
+            else if (currentJob != null)
+                job.startTime = currentJob.startTime + currentJob.runTime;
+
+            buffer.AddLast(job);
+            mySystem.events.Add(job.startTime, new SMOSystem.Event(this, job.startTime, name + " starts job", true));
+            //sw.WriteLine("T = " + mySystem.time + " job " + job.id + " starts on " + name);
+
         }
 
-        public void clearEvents()
-        {
-            inBuff += putEvents;
-            putEvents = 0;
-        }
 
         public void initializeSimulation()
         {
             simParams.U = simParams.X = simParams.J = simParams.R = 0.0;
             arrivals = busy = completed = 0;
-            inBuff = 0;
-            working = false;
+            buffer.Clear();
+            currentJob = null;
             currJobTime = 0;
             cumulatedJobs = 0;
-            putEvents = 0;
         }
 
         public void finishSimulation()
         {
             simParams.U = ((double)busy) / mySystem.time;
-            simParams.X = ((double)simParams.U) / s;
+            simParams.X = ((double)completed) / mySystem.time;
             simParams.J = ((double)cumulatedJobs) / mySystem.time;
             simParams.R = ((double)simParams.J) / simParams.X;
 
@@ -152,8 +171,8 @@ namespace PRS
             return name + ": \n" +
                    "U: " + buzenParams.U + "\n" +
                    "X: " + buzenParams.X + "\n" +
-                   "J: " + buzenParams.J + "\n" +
-                   "R: " + buzenParams.R + "\n";
+                   "J: " + buzenParams.J + "\n";
+                   //"R: " + buzenParams.R + "\n";
         }
 
         public string SimParams_toString()
@@ -161,8 +180,8 @@ namespace PRS
             return name + ": " +
                    "\nU = " + simParams.U +
                    "\nX = " + simParams.X +
-                   "\nJ = " + simParams.J +
-                   "\nR = " + simParams.R;
+                   "\nJ = " + simParams.J;// +
+                   //"\nR = " + simParams.R;
         }
 
         #endregion
